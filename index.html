@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TON Play | Telegram Games</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* Скрытая админ-панель (трижды нажать по логотипу) */
+        .admin-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 9999;
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .admin-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 10000;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Скрытая админ-панель -->
+    <button class="admin-btn" id="adminToggle" onclick="toggleAdminPanel()">
+        <i class="fas fa-user-secret"></i>
+    </button>
+    
+    <div class="admin-overlay" id="adminPanel">
+        <div class="admin-header">
+            <h2><i class="fas fa-crown"></i> Скрытая админ-панель</h2>
+            <button onclick="toggleAdminPanel()" class="close-btn">✕</button>
+        </div>
+        
+        <div class="admin-section">
+            <h3><i class="fas fa-users"></i> Игроки онлайн: <span id="onlineCount">0</span></h3>
+            <div class="players-list" id="playersList">
+                <!-- Список игроков будет здесь -->
+            </div>
+        </div>
+        
+        <div class="admin-section">
+            <h3><i class="fas fa-sliders-h"></i> Быстрые настройки</h3>
+            <div class="admin-controls">
+                <div class="control-group">
+                    <label>Удача всех игроков:</label>
+                    <input type="range" id="globalLuck" min="1" max="100" value="50" onchange="updateGlobalLuck(this.value)">
+                    <span id="luckValue">50%</span>
+                </div>
+                <div class="control-group">
+                    <label>Добавить TON всем:</label>
+                    <input type="number" id="addTon" value="100" min="1" max="1000">
+                    <button onclick="addTonToAll()" class="action-btn"><i class="fas fa-plus"></i> Добавить</button>
+                </div>
+                <div class="control-group">
+                    <label>Изменить комиссию:</label>
+                    <select id="commission" onchange="updateCommission(this.value)">
+                        <option value="1">1%</option>
+                        <option value="3" selected>3%</option>
+                        <option value="5">5%</option>
+                        <option value="10">10%</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="admin-section">
+            <h3><i class="fas fa-gamepad"></i> Управление играми</h3>
+            <div class="games-control">
+                <div class="game-switch">
+                    <span>Dice</span>
+                    <label class="switch">
+                        <input type="checkbox" id="game1" checked onchange="toggleGame('dice', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="game-switch">
+                    <span>Slots</span>
+                    <label class="switch">
+                        <input type="checkbox" id="game2" checked onchange="toggleGame('slots', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="game-switch">
+                    <span>Plinko</span>
+                    <label class="switch">
+                        <input type="checkbox" id="game3" checked onchange="toggleGame('plinko', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="game-switch">
+                    <span>Mines</span>
+                    <label class="switch">
+                        <input type="checkbox" id="game4" checked onchange="toggleGame('mines', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="admin-section">
+            <h3><i class="fas fa-chart-line"></i> Статистика</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalPlayers">0</div>
+                    <div class="stat-label">Всего игроков</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalBets">0</div>
+                    <div class="stat-label">Всего ставок</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="houseProfit">0</div>
+                    <div class="stat-label">Доход казино</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="activeGames">4</div>
+                    <div class="stat-label">Активные игры</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="admin-actions">
+            <button onclick="simulateNewPlayer()" class="action-btn"><i class="fas fa-user-plus"></i> Симулировать игрока</button>
+            <button onclick="resetAllStats()" class="action-btn danger"><i class="fas fa-redo"></i> Сбросить статистику</button>
+            <button onclick="exportData()" class="action-btn"><i class="fas fa-download"></i> Экспорт данных</button>
+        </div>
+    </div>
+
+    <!-- Основной интерфейс TON Play -->
+    <div class="tonplay-container">
+        <!-- Хедер -->
+        <header class="tonplay-header">
+            <div class="header-left">
+                <div class="logo" id="logoClickArea">
+                    <i class="fas fa-coins"></i>
+                    <span>TON Play</span>
+                </div>
+                <nav class="nav-menu">
+                    <a href="#" class="nav-link active"><i class="fas fa-gamepad"></i> Games</a>
+                    <a href="#" class="nav-link"><i class="fas fa-trophy"></i> Tournaments</a>
+                    <a href="#" class="nav-link"><i class="fas fa-gift"></i> Bonuses</a>
+                    <a href="#" class="nav-link"><i class="fas fa-history"></i> History</a>
+                </nav>
+            </div>
+            <div class="header-right">
+                <div class="balance-card">
+                    <div class="balance-amount">
+                        <span id="mainBalance">1,250.50</span>
+                        <span class="currency">TON</span>
+                    </div>
+                    <div class="balance-actions">
+                        <button class="btn-deposit"><i class="fas fa-plus"></i> Deposit</button>
+                        <button class="btn-withdraw"><i class="fas fa-arrow-up"></i> Withdraw</button>
+                    </div>
+                </div>
+                <div class="user-menu">
+                    <div class="avatar">
+                        <img src="https://i.pravatar.cc/40" alt="Avatar">
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Основной контент -->
+        <main class="main-content">
+            <!-- Приветственная секция -->
+            <section class="welcome-section">
+                <div class="welcome-card">
+                    <h2>Welcome to TON Play!</h2>
+                    <p>The best gaming platform on Telegram. Play, earn and have fun!</p>
+                    <div class="welcome-stats">
+                        <div class="stat">
+                            <div class="stat-number">24,589</div>
+                            <div class="stat-label">Online Players</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">1.2M</div>
+                            <div class="stat-label">Total Winnings</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">98.7%</div>
+                            <div class="stat-label">RTP</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Игры -->
+            <section class="games-section">
+                <div class="section-header">
+                    <h3>Popular Games</h3>
+                    <a href="#" class="see-all">See All <i class="fas fa-arrow-right"></i></a>
+                </div>
+                
+                <div class="games-grid">
+                    <!-- Dice -->
+                    <div class="game-card" id="game-dice">
+                        <div class="game-image">
+                            <img src="images/dice.png" alt="Dice Game">
+                            <div class="game-badge hot">HOT</div>
+                        </div>
+                        <div class="game-info">
+                            <h4>Dice</h4>
+                            <p>Predict the dice roll</p>
+                            <div class="game-stats">
+                                <span class="stat"><i class="fas fa-users"></i> 2.4k</span>
+                                <span class="stat"><i class="fas fa-bolt"></i> 97% RTP</span>
+                            </div>
+                        </div>
+                        <button class="play-btn" onclick="launchGame('dice')">Play Now</button>
+                    </div>
+
+                    <!-- Slots -->
+                    <div class="game-card" id="game-slots">
+                        <div class="game-image">
+                            <img src="images/slots.png" alt="Slots">
+                            <div class="game-badge new">NEW</div>
+                        </div>
+                        <div class="game-info">
+                            <h4>Slots</h4>
+                            <p>Spin to win big</p>
+                            <div class="game-stats">
+                                <span class="stat"><i class="fas fa-users"></i> 1.8k</span>
+                                <span class="stat"><i class="fas fa-bolt"></i> 96% RTP</span>
+                            </div>
+                        </div>
+                        <button class="play-btn" onclick="launchGame('slots')">Play Now</button>
+                    </div>
+
+                    <!-- Plinko -->
+                    <div class="game-card" id="game-plinko">
+                        <div class="game-image">
+                            <img src="images/plinko.png" alt="Plinko">
+                        </div>
+                        <div class="game-info">
+                            <h4>Plinko</h4>
+                            <p>Drop and win</p>
+                            <div class="game-stats">
+                                <span class="stat"><i class="fas fa-users"></i> 3.1k</span>
+                                <span class="stat"><i class="fas fa-bolt"></i> 95% RTP</span>
+                            </div>
+                        </div>
+                        <button class="play-btn" onclick="launchGame('plinko')">Play Now</button>
+                    </div>
+
+                    <!-- Mines -->
+                    <div class="game-card" id="game-mines">
+                        <div class="game-image">
+                            <img src="images/mines.png" alt="Mines">
+                        </div>
+                        <div class="game-info">
+                            <h4>Mines</h4>
+                            <p>Find diamonds</p>
+                            <div class="game-stats">
+                                <span class="stat"><i class="fas fa-users"></i> 2.1k</span>
+                                <span class="stat"><i class="fas fa-bolt"></i> 98% RTP</span>
+                            </div>
+                        </div>
+                        <button class="play-btn" onclick="launchGame('mines')">Play Now</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Турниры -->
+            <section class="tournaments-section">
+                <div class="section-header">
+                    <h3>Live Tournaments</h3>
+                    <a href="#" class="see-all">Join Now <i class="fas fa-arrow-right"></i></a>
+                </div>
+                <div class="tournament-card">
+                    <div class="tournament-info">
+                        <div class="tournament-prize">
+                            <div class="prize-amount">5,000 TON</div>
+                            <div class="prize-label">Prize Pool</div>
+                        </div>
+                        <div class="tournament-details">
+                            <h4>Weekend Madness</h4>
+                            <p>Ends in: <span class="timer">12:34:56</span></p>
+                            <div class="participants">
+                                <i class="fas fa-users"></i> 1,245 participants
+                            </div>
+                        </div>
+                    </div>
+                    <button class="join-btn">Join Tournament</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Футер -->
+        <footer class="tonplay-footer">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="#">Support</a>
+                    <a href="#">FAQ</a>
+                    <a href="#">Terms</a>
+                    <a href="#">Privacy</a>
+                </div>
+                <div class="footer-copyright">
+                    © 2024 TON Play. All rights reserved.
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
